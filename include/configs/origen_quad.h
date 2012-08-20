@@ -149,6 +149,7 @@
 #undef	CONFIG_CMD_NET		/* bootp, tftpboot, rarpboot	*/
 #undef	CONFIG_CMD_NFS		/* NFS support			*/
 #undef	CONFIG_CMD_XIMG		/* Load part of Multi Image	*/
+#define CONFIG_CMD_SOURCE
 
 #define CONFIG_CMD_USB
 
@@ -168,6 +169,8 @@
 
 #define CONFIG_CMD_EXT2
 #define CONFIG_CMD_FAT
+#define CONFIG_MD5
+#define CONFIG_CMD_MD5SUM
 
 #define CONFIG_MMC
 #define CONFIG_GENERIC_MMC
@@ -179,30 +182,14 @@
 #define USE_MMC2
 #define USE_MMC4
 
-#define CONFIG_BOOTDELAY	3
+#define CONFIG_BOOTDELAY	1
 /* Default boot commands for Android booting. */
-#define CONFIG_BOOTCOMMAND	"movi read kernel 0 40008000;movi read rootfs 0 41000000 100000;bootm 40008000 41000000"
 #define CONFIG_BOOTARGS	""
+#define CONFIG_BOOTCOMMAND	"run bootcmd_normal\;run bootcmd_extend"
+#define CONFIG_BOOTCMD_NORMAL	"movi read kernel 0 40008000;movi read rootfs 0 41000000 100000;bootm 40008000 41000000"
+#define CONFIG_BOOTCMD_EXTEND	"mmc read 1 40008000 7800 8; source 40008000"
 
-#define CONFIG_BOOTCOMMAND2	\
-		"mmc erase user 0 1072 1;"	\
-		"movi r f 1 40000000;emmc open 0;movi w z f 0 40000000;emmc close 0;"	\
-		"movi r u 1 40000000;emmc open 0;movi w z u 0 40000000;emmc close 0;"	\
-		"movi r k 1 40000000;movi w k 0 40000000;"				\
-		"movi r r 1 40000000 100000;movi w r 0 40000000 100000;"		\
-		"fdisk -c 0;"								\
-		"movi init 0;"								\
-		"fatformat mmc 0:1;"							\
-		"mmc read 1 48000000 20000 a0000;"					\
-		"fastboot flash system 48000000;"					\
-		"mmc read 1 48000000 c0000 a0000;"					\
-		"fastboot flash userdata 48000000;"					\
-		"mmc read 1 48000000 160000 a0000;"					\
-		"fastboot flash cache 48000000;"					\
-		"reset"
-
-#define CONFIG_BOOTCOMMAND3	"ext3format mmc 0:3;ext3format mmc 0:4;"		\
-				"movi read kernel 0 40008000;movi read rootfs 0 41000000 100000;bootm 40008000 41000000"
+#define CONFIG_FACTORYRESET	"ext3format mmc 0:3;ext3format mmc 0:4;"
 
 /*
  * Miscellaneous configurable options

@@ -91,11 +91,29 @@ int checkboard(void)
 
 int board_late_init (void)
 {
-#ifdef CONFIG_CPU_EXYNOS4X12
-	if(INF_REG4_REG == 0xf)
-		setenv ("bootcmd", CONFIG_BOOTCOMMAND3);
+	char *var;
+#ifdef CONFIG_BOOTCMD_NORMAL
+	setenv("bootcmd_normal", CONFIG_BOOTCMD_NORMAL);
+#endif
+#ifdef CONFIG_BOOTCMD_EXTEND
+	setenv("bootcmd_extend", CONFIG_BOOTCMD_EXTEND);
 #endif
 
+#ifdef CONFIG_CPU_EXYNOS4X12
+	if(INF_REG4_REG == 0xf)
+		run_command(CONFIG_FACTORYRESET, NULL);
+#endif
+
+	if (second_boot_info == 1) {
+		second_boot_info = 0;
+		printf("Booted with secondary booting device\n");
+		run_command("emmc open 0", NULL);
+		run_command("movi r fwbl1 1 50000000; movi w z fwbl1 0 50000000", NULL);
+		run_command("movi r bl2 1 50000000; movi w z bl2 0 50000000", NULL);
+		run_command("movi r u-boot 1 50000000; movi w z u-boot 0 50000000", NULL);
+		run_command("emmc close 0", NULL);
+		run_command("reset", NULL);
+	}
 	return 0;
 }
 
