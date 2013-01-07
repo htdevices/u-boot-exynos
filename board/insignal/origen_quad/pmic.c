@@ -197,7 +197,8 @@ void IIC0_EAck_read(void)
 
 	IIC0_ESCL_Lo;
 	IIC0_ESCL_Lo;
-	IIC0_ESDA_Lo;
+	//IIC0_ESDA_Lo;
+	IIC0_ESDA_Hi;
 	IIC0_ESCL_Hi;
 	IIC0_ESCL_Hi;
 
@@ -419,16 +420,24 @@ void IIC0_ERead (unsigned char ChipId, unsigned char IicAddr, unsigned char *Iic
 ////////////////// read reg. data. //////////////////
 	IIC0_ESDA_INP;
 
+	IIC0_ESCL_Lo;
+	IIC0_ESCL_Lo;
+	Delay();
+
 	for(i = 8; i>0; i--)
 	{
 		IIC0_ESCL_Lo;
+		IIC0_ESCL_Lo;
 		Delay();
+		IIC0_ESCL_Hi;
 		IIC0_ESCL_Hi;
 		Delay();
 		reg = GPD1DAT;
 		IIC0_ESCL_Hi;
-		Delay();
 		IIC0_ESCL_Hi;
+		Delay();
+		IIC0_ESCL_Lo;
+		IIC0_ESCL_Lo;
 		Delay();
 
 		reg = (reg >> 0) & 0x1;
@@ -621,9 +630,8 @@ void I2C_MAX8997_EnableReg(PMIC_RegNum eRegNum, u8 ucEnable)
 	IIC0_EWrite(MAX8997_ADDR, reg_addr, read_data);
 }
 
-#ifdef CONFIG_S5M8767A
-#define CALC_S5M8767_VOLT1(x)  ( (x<600) ? 0 : ((x-600)/6.25) )
-#define CALC_S5M8767_VOLT2(x)  ( (x<650) ? 0 : ((x-650)/6.25) )
+#define CALC_S5M8767_BUCK234_VOLT(x)  ( (x<600) ? 0 : ((x-600)/6.25) )
+#define CALC_S5M8767_BUCK156_VOLT(x)  ( (x<650) ? 0 : ((x-650)/6.25) )
 
 void I2C_S5M8767_VolSetting(PMIC_RegNum eRegNum, unsigned char ucVolLevel, unsigned char ucEnable)
 {
@@ -658,27 +666,61 @@ void I2C_S5M8767_VolSetting(PMIC_RegNum eRegNum, unsigned char ucVolLevel, unsig
 	IIC0_EWrite(S5M8767_ADDR, reg_addr, vol_level);
 }
 
+
 void pmic_init(void)
 {
 	float vdd_arm, vdd_int, vdd_g3d;
 	float vdd_mif;
+	float vdd_ldo14;
+
 	u8 read_data;
 
 	vdd_arm = CONFIG_PM_VDD_ARM;
 	vdd_int = CONFIG_PM_VDD_INT;
 	vdd_g3d = CONFIG_PM_VDD_G3D;
 	vdd_mif = CONFIG_PM_VDD_MIF;
+	vdd_ldo14 = CONFIG_PM_VDD_LDO14;
 
 	IIC0_ESetport();
+	IIC3_ESetport();
 
-	I2C_S5M8767_VolSetting(PMIC_BUCK1, CALC_S5M8767_VOLT2(vdd_mif * 1000), 1);
-	I2C_S5M8767_VolSetting(PMIC_BUCK2, CALC_S5M8767_VOLT1(vdd_arm * 1000), 1);
-	I2C_S5M8767_VolSetting(PMIC_BUCK3, CALC_S5M8767_VOLT1(vdd_int * 1000), 1);
-	I2C_S5M8767_VolSetting(PMIC_BUCK4, CALC_S5M8767_VOLT1(vdd_g3d * 1000), 1);
+	/* read ID */
+	IIC0_ERead(MAX8997_ADDR, 0, &read_data);
+	if (read_data == 0x77) {
+		I2C_MAX8997_VolSetting(PMIC_BUCK1, CALC_MAXIM_BUCK1245_VOLT(vdd_arm * 1000), 1);
+		I2C_MAX8997_VolSetting(PMIC_BUCK2, CALC_MAXIM_BUCK1245_VOLT(vdd_int * 1000), 1);
+		I2C_MAX8997_VolSetting(PMIC_BUCK3, CALC_MAXIM_BUCK37_VOLT(vdd_g3d * 1000), 1);
 
+		/* LDO14 config */
+		I2C_MAX8997_VolSetting(PMIC_LDO14, CALC_MAXIM_ALL_LDO(vdd_ldo14 * 1000), 3);
+
+		/* VDD_MIF, mode 1 register */
+		IIC3_EWrite(MAX8952_ADDR, 0x01, 0x80 | (((unsigned char)(vdd_mif * 100))-77));
+	} else if((0 <= read_data) && (read_data <= 0x5)) {
+		I2C_S5M8767_VolSetting(PMIC_BUCK1, CALC_S5M8767_BUCK156_VOLT(vdd_mif * 1000), 1);
+		I2C_S5M8767_VolSetting(PMIC_BUCK2, CALC_S5M8767_BUCK234_VOLT(vdd_arm * 1000), 1);
+		I2C_S5M8767_VolSetting(PMIC_BUCK3, CALC_S5M8767_BUCK234_VOLT(vdd_int * 1000), 1);
+		I2C_S5M8767_VolSetting(PMIC_BUCK4, CALC_S5M8767_BUCK234_VOLT(vdd_g3d * 1000), 1);
+
+		IIC0_EWrite(S5M8767_ADDR, 0x5A, 0x58);
+	} else {
+		/* set DVS1,2,3 as 0 by GPL0 */
+		*((volatile unsigned int *)0x110000c0) = 0x11111111;
+		*((volatile unsigned int *)0x110000c4) = 0x7;
+		*((volatile unsigned int *)0x110000c4) = 0x0;
+		*((volatile unsigned int *)0x110000c4) = 0x7;
+		*((volatile unsigned int *)0x110000c4) = 0x0;
+		*((volatile unsigned int *)0x110000c0) = 0x0;
+		
+		/* VDD_MIF */
+		IIC0_EWrite(MAX77686_ADDR, 0x11, CALC_MAXIM77686_BUCK156789_VOLT(vdd_mif * 1000));
+		/* VDD_ARM */
+		IIC0_EWrite(MAX77686_ADDR, 0x14, CALC_MAXIM77686_BUCK234_VOLT(vdd_arm * 1000));
+		/* VDD_INT */
+		IIC0_EWrite(MAX77686_ADDR, 0x1E, CALC_MAXIM77686_BUCK234_VOLT(vdd_int * 1000));
+		/* VDD_G3D */
+		IIC0_EWrite(MAX77686_ADDR, 0x28, CALC_MAXIM77686_BUCK234_VOLT(vdd_g3d * 1000));
+	}
+
+	GPA1PUD |= (0x5<<4);	// restore reset value: Pull Up/Down Enable SCL, SDA
 }
-#else
-void pmic_init(void)
-{
-}
-#endif

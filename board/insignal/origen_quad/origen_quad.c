@@ -22,6 +22,12 @@ unsigned int second_boot_info = 0xffffffff;
 
 int board_init(void)
 {
+	char bl1_version[9] = {0};
+
+	printf("TrustZone Enabled BSP\n");
+	strncpy(&bl1_version[0], (char *)0x0204f810, 8);
+	printf("BL1 version: %s\n", &bl1_version[0]);
+
 	/* check half synchronizer for asynchronous bridge */
 	if(*(unsigned int *)(0x10010350) == 0x1)
 		printf("Using half synchronizer for asynchronous bridge\n");

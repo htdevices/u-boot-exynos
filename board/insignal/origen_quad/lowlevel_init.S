@@ -31,21 +31,65 @@ cache_init:
 	mcreq	p15, 0, r0, c1, c0, 1	@ write ACTLR
 	mov	pc, lr
 
-	.globl	lowlevel_init
+	/* Set EMA value for Pegasus-Q Prime */
+set_ema_value:
+	ldr r0, =CHIP_ID_BASE
+	ldr r1, [r0]
+
+	lsr r2, r1, #12
+	ldr r3, =0xE4412
+	cmp r2, r3
+	movne pc, lr
+
+	and r1, r1, #0xff
+	subs r1, r1, #0x20
+	movmi pc, lr
+
+	/* before setting EMA value
+	   SCLK_APLL must be under 200Mhz
+	   iROM sets APLL 400Mhz
+	   so set SCLK_APLL to 200Mhz
+	   by changing APLL_RATIO from 0 to 1 */
+	ldr r0, =0x10044500
+	ldr r1, [r0]
+	orr r1, r1, #0x1000000
+	str r1, [r0]
+
+	ldr r0, =0x10045008
+	ldr r1, =0x00000101
+	str r1, [r0]
+	mov pc, lr
+
+	.globl lowlevel_init
 lowlevel_init:
 
 	/* use iROM stack in bl2 */
 	ldr	sp, =0x02060000
 	push {lr}
 
-	/* check reset	status  */
-	ldr	r0, =(INF_REG_BASE + INF_REG1_OFFSET)
-	ldr	r1, [r0]
+	bl set_ema_value
+
+	/* initialization for CMU_SYSCLK_ISP function */
+	mov	r1, #0
+	ldr	r0, =0x10021174		/* CMU_RESET_ISP_SYS_PWR_REG */
+	str	r1, [r0]
+	ldr	r0, =0x100213B8		/* CMU_SYSCLK_ISP_SYS_PWR_REG */
+	str	r1, [r0]
+
+	/* check reset status  */
+	ldr     r0, =(INF_REG_BASE + INF_REG1_OFFSET)
+	ldr     r1, [r0]
 
 	/* Sleep wakeup reset	*/
 	ldr	r2, =S5P_CHECK_SLEEP
 	cmp	r1, r2
 	beq	wakeup_reset
+
+	/* PS-Hold high */
+	ldr	r0, =0x1002330c
+	ldr	r1, [r0]
+	orr	r1, r1, #0x300
+	str	r1, [r0]
 
 	/* set	CP reset	to low */
 	ldr	r0, =0x11000C60
@@ -78,16 +122,6 @@ lowlevel_init:
 	ldr	r1, =0x00005300  /* PS_HOLD output high */
 	str	r1, [r0]
 
-	bl	uart_asm_init
-
-#if defined(CONFIG_ONENAND)
-	bl	onenandcon_init
-#endif
-	
-#if defined(NAND_BOOTING)
-	bl	nand_asm_init
-#endif
-
 	bl	read_om
 
 	/* when we already run in ram, we don't need to relocate U-Boot.
@@ -101,14 +135,12 @@ lowlevel_init:
 	cmp	r1, r2			/* compare r0, r1 */
 	beq	after_copy		/* r0 == r1 then skip sdram init and u-boot.bin loading */
 
-#ifndef CONFIG_SMDKC220
 	ldr	r0, =CHIP_ID_BASE
 	ldr	r1, [r0]
 	lsr	r1, r1, #8
 	and	r1, r1, #3
 	cmp	r1, #2
 	bne	v310_1
-#endif
 
 	/* Memory initialize */
 	bl	mem_ctrl_asm_init
@@ -123,13 +155,24 @@ v310_1:
 	bl	system_clock_init
 
 	/* Memory initialize */
-	bl	mem_ctrl_asm_init
+	bl mem_ctrl_asm_init_ddr3
 
 1:
 	b load_uboot
 
+cold_boot:
+	bl	relocate_code
+
+	ldr	r0, _boot_device
+
+	b	coldboot
+
+_boot_device:
+	.word	0x0
+
 after_copy:
-#ifdef CONFIG_SMDKC220
+	bl uart_asm_init
+
 	/* set	up C2C */	
 	ldr	r0, =S5PV310_SYSREG_BASE
 	ldr	r2, =GENERAL_CTRL_C2C_OFFSET
@@ -137,7 +180,6 @@ after_copy:
 	ldr	r3, =0x4000
 	orr	r1, r1, r3
 	str	r1, [r0, r2]
-#endif
 
 #ifdef CONFIG_ENABLE_MMU
 	bl	enable_mmu
@@ -166,45 +208,17 @@ _second_boot_info:
 
 
 wakeup_reset:
-
-	bl	read_om
-
-	/* If eMMC booting */
-	ldr	r0, =INF_REG_BASE
-	ldr	r1, [r0, #INF_REG3_OFFSET]
-	cmp	r1, #BOOT_EMMC_4_4
-	bleq	emmc_4_4_endbootOp_eMMC
-
-	/* check reset	status */
+	/* clear INFORM1 for security reason  */
 	ldr	r0, =(INF_REG_BASE + INF_REG1_OFFSET)
-	ldr	r1, [r0]
+	mov	r1, #0x0
+	str	r1, [r0]
 
-	/* If NOT Sleep wakeup reset	*/
-	ldr	r2, =S5P_CHECK_SLEEP
-	cmp	r1, r2
-	bne	exit_wakeup
-
-	/* MSHC CLKENA Disable */
-	ldr	r0, =0x12550010
-	ldr	r1, =0x0
-	str		r1, [r0]
-
-	ldr	r0, =0x1255002C
-#if defined(CONFIG_EXYNOS4212)
-	ldr	r1, =(1<<31|1<<29|1<<21|1<<13);
-#else
-	ldr	r1, =(1<<31|1<<21|1<<13);
-#endif
-	str		r1, [r0]
-
-#ifndef CONFIG_SMDKC220
 	ldr	r0, =CHIP_ID_BASE
 	ldr	r1, [r0]
 	lsr	r1, r1, #8
 	and	r1, r1, #3
 	cmp	r1, #2
 	bne	wake_v310
-#endif
 
 	/* check C2C_CTRL enable bit */
 	ldr	r3, =S5PV310_POWER_BASE
@@ -217,55 +231,22 @@ wakeup_reset:
 	bl	mem_ctrl_asm_init
 skip_dmc:
 	bl	system_clock_init
-
-	/* If eMMC booting */
-	/* mmc ch4 devider value change */
-	ldr	r0, =INF_REG_BASE
-	ldr	r1, [r0, #INF_REG3_OFFSET]
-	cmp	r1, #BOOT_EMMC_4_4
-	bleq	mmc_ch4_devider_change
-
 	b	exit_wakeup
 
 wake_v310:
 	bl	system_clock_init
-	bl	mem_ctrl_asm_init
+	bl	mem_ctrl_asm_init_ddr3
 
 exit_wakeup:
+	bl	relocate_code
 
-	/*Load return address and jump to kernel*/
-	ldr	r0, =(INF_REG_BASE + INF_REG0_OFFSET)
-	ldr	r1, [r0]	/* r1 = physical address of s5pc110_cpu_resume function*/
-
-	mov	pc, r1		/*Jump to kernel */
-	nop
-	nop
-
+	b	warmboot
 
 read_om:
 	/* Read booting information */
 	ldr	r0, =S5PV310_POWER_BASE
 	ldr	r1, [r0,#OMR_OFFSET]
 	bic	r2, r1, #0xffffffc1
-
-#if defined(CONFIG_NAND)
-	/* NAND BOOT */
-@	cmp	r2, #0x0		@ 512B 4-cycle
-@	moveq	r3, #BOOT_NAND
-
-@	cmp	r2, #0x2		@ 2KB 5-cycle
-@	moveq	r3, #BOOT_NAND
-
-@	cmp	r2, #0x4		@ 4KB 5-cycle	8-bit ECC
-@	moveq	r3, #BOOT_NAND
-
-	cmp	r2, #0x10	@ 2KB 5-cycle	16-bit ECC
-	moveq	r3, #BOOT_NAND
-#endif
-#if defined(CONFIG_ONENAND)
-	cmp	r2, #0xA
-	moveq	r3, #BOOT_ONENAND
-#endif
 
 	/* SD/MMC BOOT */
 	cmp	r2, #0x4
@@ -336,37 +317,14 @@ uart_asm_init:
 load_uboot:
 	ldr	r0, =INF_REG_BASE
 	ldr	r1, [r0, #INF_REG3_OFFSET]
-#if defined(CONFIG_NAND)
-	cmp	r1, #BOOT_NAND
-	beq	nand_boot
-#endif
-#if defined(CONFIG_ONENAND)
-	cmp	r1, #BOOT_ONENAND
-	beq	onenand_boot
-#endif
 	cmp	r1, #BOOT_MMCSD
 	beq 	mmcsd_boot
 	cmp	r1, #BOOT_EMMC
 	beq	emmc_boot
 	cmp	r1, #BOOT_EMMC_4_4
 	beq	emmc_boot_4_4
-	cmp	r1, #BOOT_NOR
-	beq	nor_boot
 	cmp	r1, #BOOT_SEC_DEV
 	beq	mmcsd_boot
-
-#if defined(CONFIG_NAND)
-nand_boot:
-	mov	r0, #0x1000
-	bl	copy_uboot_to_ram
-	b	after_copy
-#endif
-
-#if defined(CONFIG_ONENAND)
-onenand_boot:
-	bl	onenand_bl2_copy /*goto 0x1010*/
-	b	after_copy
-#endif
 
 mmcsd_boot:
 #ifdef CONFIG_SMDKC220
@@ -387,8 +345,9 @@ mmcsd_boot:
 #endif
 #endif
 	mov	r0, #SDMMC_CH2
+	str	r0, _boot_device
 	bl	load_uboot_image
-	b	coldboot
+	b	cold_boot
 	b	after_copy
 
 emmc_boot:
@@ -400,8 +359,9 @@ emmc_boot:
 	str		r1, [r0, r2]
 #endif
 	mov	r0, #EMMC
+	str	r0, _boot_device
 	bl	load_uboot_image
-	b	coldboot
+	b	cold_boot
 	b	after_copy
 
 emmc_boot_4_4:
@@ -426,50 +386,14 @@ emmc_boot_4_4:
 	bl	mmc_ch4_devider_change
 	/* u-boot image copy from boot partition to DRAM. */
 	mov	r0, #EMMC_4_4
+	str	r0, _boot_device
 	bl	load_uboot_image
-	b	coldboot
-	b	after_copy
-
-nor_boot:
-@	bl	read_hword
+	b	cold_boot
 	b	after_copy
 
 check_om_setting:
 	b check_om_setting
 
-#if defined(CONFIG_ONENAND)
-/*
- * OneNAND Interface Init
- */
-onenandcon_init:
-wait_orwb:
-
-	@; Read ONENAND_IF_STATUS
-	ldr	r0, =CFG_ONENANDXL_BASE		@; 0x0C600000
-	ldr	r1, [r0, #0x100]		@; ONENAND_IF_STATUS_OFFSET(0x100)
-	bic	r1, r1, #0xFFFFFFFE
-	cmp	r1, #0x0
-
-	@; ORWB != 0x0
-	bne	wait_orwb
-
-	@; write new configuration to onenand system configuration1 register
-	ldr	r1, =0xF006			@; Sync.
-	ldr	r2, =(CFG_ONENAND_BASE+0x1E442)	@; 0x1E442(REG_SYS_CONF1)
-	strh	r1, [r2]
-
-	@; read one dummy halfword
-	ldrh	r1, [r2]
-	ldrh	r1, [r2]
-
-	@; write new configuration to ONENAND_IF_CTRL
-	ldr	r0, =CFG_ONENANDXL_BASE		@; 0x0C600000
-	@;ldr	r1, =0x2F006			@; ONENAND_IF_CTRL_REG_VAL (GCE off)
-	ldr	r1, =0x402F006			@; ONENAND_IF_CTRL_REG_VAL (GCE on)
-	str	r1, [r0, #0x100]		@; ONENAND_IF_STATUS_OFFSET(0x100)
-
-	mov	pc, lr
-#endif
 
 /*
  * MPLL is Changed from 400MHz to 800MHz.
@@ -482,66 +406,66 @@ mmc_ch4_devider_change:
 	ldr	r1, [r0, r2]
 	bic	r1, r1, #(0xFF << 8)
 	bic	r1, r1, #(0xF)
-	orr	r1, r1, #(0x9 << 8)
-	orr	r1, r1, #0x1
+	orr	r1, r1, #(0x1 << 8)
+	orr	r1, r1, #0x7
 	str	r1, [r0, r2]
 	mov	pc, lr
 
 
-#if defined(CONFIG_NAND)
 /*
- * Nand Interface Init for SMDKC100
+ * Relocate code
  */
-	.globl	nand_asm_init
-nand_asm_init:
+relocate_code:
+	adr	r0, nscode_base			@ r0: source address (start)
+	adr	r1, nscode_end			@ r1: source address (end)
+	ldr	r2, =CONFIG_PHY_IRAM_NS_BASE	@ r2: target address
 
-	/* Setting GPIO for NAND */
-	/* This setting is NAND initialze code at booting time in iROM. */
+1:
+	ldmia	r0!, {r3-r6}
+	stmia	r2!, {r3-r6}
+	cmp	r0, r1
+	blt	1b
 
-	ldr	r0, =0x11000000
+	dsb
+	isb
 
-	ldr	r1, [r0, #MP01CON_OFFSET]
-	bic	r1, r1, #(0xf<<8)
-	orr	r1, r1, #(0x3<<8)
-	str	r1, [r0, #MP01CON_OFFSET]
-	
-	ldr	r2, =0x220300
-	str	r2, [r0, #MP01CON_OFFSET]
-
-	ldr	r1, [r0, #MP01PUD_OFFSET]
-	bic	r1, r1, #(0x3<<4)
-	str	r1, [r0, #MP01PUD_OFFSET]
-
-	ldr	r1, [r0, #MP03CON_OFFSET]
-	bic	r1, r1, #0xFFFFFF
-	ldr	r2, =0x222
-	orr	r1, r1, r2
-	str	r1, [r0, #MP03CON_OFFSET]
-
-	ldr	r1, [r0, #MP03PUD_OFFSET]
-	ldr	r2, =0x3fff
-	bic	r1, r1, r2
-	str	r1, [r0, #MP03PUD_OFFSET]
-
-	ldr	r0, =ELFIN_NAND_BASE
-	ldr	r1, [r0, #NFCONF_OFFSET]
-	ldr	r2, =0x7772
-	bic	r1, r1, r2
-	ldr	r2, =NFCONF_VAL
-	orr	r1, r1, r2
-	str	r1, [r0, #NFCONF_OFFSET]
-	ldr	r1, [r0, #NFCONT_OFFSET]
-	ldr	r2, =0x6
-	bic	r1, r1, r2
-	ldr	r2, =NFCONT_VAL
-	orr	r1, r1, r2
-	str	r1, [r0, #NFCONT_OFFSET]
-	ldr	r1, [r0, #MP01CON_OFFSET]
-	bic	r1, r1, #(0xf<<8)
-	orr	r1, r1, #(0x3<<8)
-	str	r1, [r0, #MP01CON_OFFSET]
 	mov	pc, lr
+
+	.align	4
+nscode_base:
+	adr	r0, _ns_reg5
+	b	1f
+
+	.word	0x0		@ REG0: RESUME_ADDR
+	.word	0x0		@ REG1: RESUME_FLAG
+	.word	0x0		@ REG2
+	.word	0x0		@ REG3
+	.word	0x0		@ REG4
+_ns_reg5:
+	.word	0x0		@ REG5: CPU1_BOOT_REG
+	.word	0x0		@ REG6: REG_DIRECTGO_FLAG
+	.word	0x0		@ REG7: REG_DIRECTGO_ADDR
+	.word	0x0		@ REG8
+	.word	0x0		@ REG9
+
+	nop
+	nop
+
+1:
+#if defined(CONFIG_EXYNOS4412)
+	mrc	p15, 0, r1, c0, c0, 5		@ MPIDR
+	and	r1, r1, #0x3
+	add	r0, r0, r1, lsl #0x2
 #endif
+cpu1_wait:
+	.word	0xE320F002			@ wfe instruction
+	ldr	r1, [r0]
+	cmp	r1, #0x0
+	bxne	r1
+	b	cpu1_wait
+	nop
+nscode_end:
+
 
 #ifdef CONFIG_ENABLE_MMU
 enable_mmu:
