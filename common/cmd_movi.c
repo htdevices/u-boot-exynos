@@ -151,14 +151,6 @@ int do_movi(cmd_tbl_t * cmdtp, int flag, int argc, char *argv[])
 	}
 	/* u-boot r/w */
 	if (attribute == 0x2) {
-		/* on write case we should write BL1 1st. */
-		if (rw) {
-			start_blk = raw_area_control.image[1].start_blk;
-			blkcnt = raw_area_control.image[1].used_blk;
-			printf("Writing BL1 to device %d Start %ld (Count %ld sectors)..\n",
-				dev_num, start_blk, blkcnt);
-			movi_write_bl1(addr, dev_num);
-		}
 		for (i=0, image = raw_area_control.image; i<15; i++) {
 			if (image[i].attribute == attribute)
 				break;

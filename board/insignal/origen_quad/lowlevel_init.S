@@ -126,13 +126,9 @@ v310_1:
 	bl	mem_ctrl_asm_init
 
 1:
-
-	bl	tzpc_init
-
 	b load_uboot
 
 after_copy:
-
 #ifdef CONFIG_SMDKC220
 	/* set	up C2C */	
 	ldr	r0, =S5PV310_SYSREG_BASE
@@ -229,13 +225,11 @@ skip_dmc:
 	cmp	r1, #BOOT_EMMC_4_4
 	bleq	mmc_ch4_devider_change
 
-	bl	tzpc_init
 	b	exit_wakeup
 
 wake_v310:
 	bl	system_clock_init
 	bl	mem_ctrl_asm_init
-	bl	tzpc_init
 
 exit_wakeup:
 
@@ -392,7 +386,9 @@ mmcsd_boot:
 	str	r1, [r0, r2]
 #endif
 #endif
-	bl	movi_uboot_copy
+	mov	r0, #SDMMC_CH2
+	bl	load_uboot_image
+	b	coldboot
 	b	after_copy
 
 emmc_boot:
@@ -403,7 +399,9 @@ emmc_boot:
 	orr		r1, r1, #0xf
 	str		r1, [r0, r2]
 #endif
-	bl	emmc_uboot_copy
+	mov	r0, #EMMC
+	bl	load_uboot_image
+	b	coldboot
 	b	after_copy
 
 emmc_boot_4_4:
@@ -427,9 +425,9 @@ emmc_boot_4_4:
 	/* mmc ch4 devider value change */
 	bl	mmc_ch4_devider_change
 	/* u-boot image copy from boot partition to DRAM. */
-	bl	emmc_4_4_uboot_copy
-	/* Exit Boot mood */
-	bl	emmc_4_4_endbootOp_eMMC
+	mov	r0, #EMMC_4_4
+	bl	load_uboot_image
+	b	coldboot
 	b	after_copy
 
 nor_boot:
@@ -472,56 +470,6 @@ wait_orwb:
 
 	mov	pc, lr
 #endif
-
-/*
- * Setting TZPC[TrustZone Protection Controller]
- */
-
-tzpc_init:
-
-	ldr	r0, =ELFIN_TZPC0_BASE
-	mov	r1, #0x0
-	str	r1, [r0]
-	mov	r1, #0xff
-	str	r1, [r0, #TZPC_DECPROT0SET_OFFSET]
-	str	r1, [r0, #TZPC_DECPROT1SET_OFFSET]
-	mov	r1, #0xbd
-	str	r1, [r0, #TZPC_DECPROT2SET_OFFSET]
-	mov	r1, #0xff
-	str	r1, [r0, #TZPC_DECPROT3SET_OFFSET]
-
-	ldr	r0, =ELFIN_TZPC1_BASE
-	str	r1, [r0, #TZPC_DECPROT0SET_OFFSET]
-	str	r1, [r0, #TZPC_DECPROT1SET_OFFSET]
-	str	r1, [r0, #TZPC_DECPROT2SET_OFFSET]
-	str	r1, [r0, #TZPC_DECPROT3SET_OFFSET]
-
-	ldr	r0, =ELFIN_TZPC2_BASE
-	str	r1, [r0, #TZPC_DECPROT0SET_OFFSET]
-	str	r1, [r0, #TZPC_DECPROT1SET_OFFSET]
-	str	r1, [r0, #TZPC_DECPROT2SET_OFFSET]
-	str	r1, [r0, #TZPC_DECPROT3SET_OFFSET] 
-
-	ldr	r0, =ELFIN_TZPC3_BASE
-	str	r1, [r0, #TZPC_DECPROT0SET_OFFSET]
-	str	r1, [r0, #TZPC_DECPROT1SET_OFFSET]
-	str	r1, [r0, #TZPC_DECPROT2SET_OFFSET]
-	str	r1, [r0, #TZPC_DECPROT3SET_OFFSET]
-
-	ldr	r0, =ELFIN_TZPC4_BASE
-	str	r1, [r0, #TZPC_DECPROT0SET_OFFSET]
-	str	r1, [r0, #TZPC_DECPROT1SET_OFFSET]
-	str	r1, [r0, #TZPC_DECPROT2SET_OFFSET]
-	str	r1, [r0, #TZPC_DECPROT3SET_OFFSET]
-
-	ldr	r0, =ELFIN_TZPC5_BASE
-	str	r1, [r0, #TZPC_DECPROT0SET_OFFSET]
-	str	r1, [r0, #TZPC_DECPROT1SET_OFFSET]
-	str	r1, [r0, #TZPC_DECPROT2SET_OFFSET]
-	str	r1, [r0, #TZPC_DECPROT3SET_OFFSET]
-
-	mov	pc, lr
-
 
 /*
  * MPLL is Changed from 400MHz to 800MHz.

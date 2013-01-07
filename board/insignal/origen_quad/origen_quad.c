@@ -111,6 +111,7 @@ int board_late_init (void)
 		run_command("movi r fwbl1 1 50000000; movi w z fwbl1 0 50000000", NULL);
 		run_command("movi r bl2 1 50000000; movi w z bl2 0 50000000", NULL);
 		run_command("movi r u-boot 1 50000000; movi w z u-boot 0 50000000", NULL);
+		run_command("movi r tzsw 1 50000000; movi w z tzsw 0 50000000", NULL);
 		run_command("emmc close 0", NULL);
 		run_command("reset", NULL);
 	}

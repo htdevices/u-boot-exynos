@@ -32,6 +32,7 @@ LIB	= $(obj)lib$(BOARD).o
 
 COBJS-y	:= origen_quad.o
 COBJS-$(CONFIG_PM)	+= pmic.o
+COBJS-y	+= smc.o
 SOBJS	:= lowlevel_init.o
 SOBJS	+= mem_init.o
 SOBJS	+= clock_init.o

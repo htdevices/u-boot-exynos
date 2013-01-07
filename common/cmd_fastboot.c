@@ -636,6 +636,22 @@ static int write_to_ptn_sdmmc(struct fastboot_ptentry *ptn, unsigned int addr, u
 				argv[2] = ptn->name;
 
 		}
+		else if (!strcmp(ptn->name, "tzsw"))
+		{
+			if (INF_REG3_REG == 7){
+				argv[2] = part2;
+				argv[3] = ptn->name;
+				argv[4] = dev_num;
+				argv[5] = buffer;
+				argc = 6;
+				strncpy(part2, "zero", 7);
+				sprintf(run_cmd,"emmc open 0");
+				run_command(run_cmd, 0);
+			} 
+			else
+				argv[2] = ptn->name;
+
+		}
 		else if (!strcmp(ptn->name, "ramdisk"))
 		{
 			strncpy(part, "rootfs", 7);
@@ -656,7 +672,8 @@ static int write_to_ptn_sdmmc(struct fastboot_ptentry *ptn, unsigned int addr, u
 		if (INF_REG3_REG == 7 &&
 			(!strcmp(ptn->name, "fwbl1") ||
 			 !strcmp(ptn->name, "bootloader") ||
-			 !strcmp(ptn->name, "bl2"))) {
+			 !strcmp(ptn->name, "bl2") ||
+			 !strcmp(ptn->name, "tzsw"))) {
 			sprintf(run_cmd,"emmc close 0");
 			run_command(run_cmd, 0);
 		}
@@ -1514,6 +1531,13 @@ static int set_partition_table_sdmmc()
 
 	/* Bootloader */
 	strcpy(ptable[pcount].name, "bootloader");
+	ptable[pcount].start = 0;
+	ptable[pcount].length = 0;
+	ptable[pcount].flags = FASTBOOT_PTENTRY_FLAGS_USE_MOVI_CMD;
+	pcount++;
+
+	/* TrustZone S/W */
+	strcpy(ptable[pcount].name, "tzsw");
 	ptable[pcount].start = 0;
 	ptable[pcount].length = 0;
 	ptable[pcount].flags = FASTBOOT_PTENTRY_FLAGS_USE_MOVI_CMD;

@@ -102,14 +102,14 @@ void emmc_4_4_endbootOp_eMMC(void)
 
 void movi_write_env(ulong addr)
 {
-	movi_write(0, raw_area_control.image[3].start_blk,
-		raw_area_control.image[3].used_blk, addr);
+	movi_write(0, raw_area_control.image[4].start_blk,
+		raw_area_control.image[4].used_blk, addr);
 }
 
 void movi_read_env(ulong addr)
 {
-	movi_read(0, raw_area_control.image[3].start_blk,
-		raw_area_control.image[3].used_blk, addr);
+	movi_read(0, raw_area_control.image[4].start_blk,
+		raw_area_control.image[4].used_blk, addr);
 }
 
 void movi_write_bl1(ulong addr, int dev_num)

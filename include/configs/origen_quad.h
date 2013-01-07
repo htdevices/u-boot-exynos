@@ -314,6 +314,13 @@
 #define BOOT_EMMC		0x6
 #define BOOT_EMMC_4_4		0x7
 
+/* Boot device */
+#define SDMMC_CH2		0x0
+#define SDMMC_CH0		0x4
+#define EMMC			0x10
+#define EMMC_4_4		0x14
+#define USB			0x40
+
 /* nand copy size from nand to DRAM.*/
 #define	COPY_BL2_SIZE		0x80000
 #define CONFIG_SYS_MAX_NAND_DEVICE     1
