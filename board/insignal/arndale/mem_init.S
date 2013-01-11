@@ -16,6 +16,11 @@
 #define CONFIG_LOW_POWER_CTRL	1
 #define CONFIG_DMC_BRB
 
+#define DDR_R1_FBM_BASE		0x10c30000
+#define DDR_R0_FBM_BASE		0x10dc0000
+#define FBM_MODESEL0		0x0
+#define FBM_THRESHOLDSEL0	0x40
+
 	.globl mem_ctrl_asm_init
 mem_ctrl_asm_init:
 	push	{lr}
@@ -45,6 +50,18 @@ mem_ctrl_init_done:
 	str r1, [r0, #DMC_BRBRSVCONTROL]
 	ldr r1, =0x1
 	str r1, [r0, #DMC_BRBQOSCONFIG]
+
+	ldr r0, =DDR_R1_FBM_BASE
+	ldr r1, =0x0
+	str r1, [r0, #FBM_MODESEL0]
+	ldr r1, =0x4
+	str r1, [r0, #FBM_THRESHOLDSEL0]
+
+	ldr r0, =DDR_R0_FBM_BASE
+	ldr r1, =0x2
+	str r1, [r0, #FBM_MODESEL0]
+	ldr r1, =0x1
+	str r1, [r0, #FBM_THRESHOLDSEL0]
 #endif
 	pop	{lr}
 	mov	pc, lr
