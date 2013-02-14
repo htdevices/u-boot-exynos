@@ -716,7 +716,8 @@ void pmic8767_init(void)
 
 #endif
 #endif /* CONFIG_CPU_EXYNOS5250_EVT1 */
-
+	IIC0_EWrite(S5M8767_ADDR, 0x67, 0xEC); // LDO9
+	IIC0_EWrite(S5M8767_ADDR, 0x78, 0xD4); // LDO26
 }
 
 
