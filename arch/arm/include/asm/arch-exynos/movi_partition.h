@@ -33,7 +33,7 @@
 #else
 #define PART_SIZE_UBOOT		(512 * 1024)
 #endif
-#define PART_SIZE_KERNEL	(4 * 1024 * 1024)
+#define PART_SIZE_KERNEL	(5 * 1024 * 1024)
 #define PART_SIZE_ROOTFS	(26 * 1024 * 1024)
 
 #if defined(CONFIG_CPU_EXYNOS5250_EVT1)
