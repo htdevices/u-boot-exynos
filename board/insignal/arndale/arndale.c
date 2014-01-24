@@ -215,7 +215,7 @@ int board_late_init(void)
 	}
 
 	int *GPX1DAT = 0x11400C24;
-	if (*GPX1DAT == 0x60) {
+	if ((*GPX1DAT & 0xF0) == 0x60) {
 		setenv("bootcmd", CONFIG_BOOTCMD_EXTEND);
 	}
 
