@@ -698,8 +698,10 @@ static int rx_handler (const unsigned char *buffer, unsigned int buffer_size)
 
 	/* Use 65 instead of 64
 	   null gets dropped
-	   strcpy's need the extra byte */
-	char response[65];
+	   strcpy's need the extra byte
+	char response[65]; */
+	double resp[9];
+	char *response = (char*)resp;
 
 	if (download_size)
 	{
